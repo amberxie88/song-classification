@@ -23,7 +23,8 @@ def initialize():
 	return sp 
 
 def get_song_features(feature_list):
-	attributes = ["danceability", "energy", "speechiness", "acousticness", "instrumentalness", "liveness", "valence", "tempo"]
+	#attributes = ["danceability", "energy", "speechiness", "acousticness", "instrumentalness", "liveness", "valence", "tempo"]
+	attributes = ["energy", "speechiness", "acousticness", "instrumentalness", "liveness", "valence"]
 	chosen_features = []
 	for attribute in attributes:
 		chosen_features.append(feature_list.get(attribute))
@@ -68,5 +69,6 @@ def create_csv(playlists):
 # Sad Songs: spotify:playlist:7ABD15iASBIpPP5uJ5awvq
 # Party Hits: spotify:playlist:6IfGK9nLC9ChgD7FTZzkLJ
 # Lofi: spotify:playlist:0vvXsWCC9xrXsKd4FyS8kM
-playlists = ["7ABD15iASBIpPP5uJ5awvq", "6IfGK9nLC9ChgD7FTZzkLJ", "0vvXsWCC9xrXsKd4FyS8kM"]
+# Sleep: spotify:playlist:37i9dQZF1DWZd79rJ6a7lp
+playlists = ["7ABD15iASBIpPP5uJ5awvq", "6IfGK9nLC9ChgD7FTZzkLJ"]
 create_csv(playlists)

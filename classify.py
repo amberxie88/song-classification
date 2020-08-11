@@ -54,11 +54,11 @@ class MLP(Module):
     def __init__(self, n_inputs):
         super(MLP, self).__init__()
         # input to first hidden layer
-        self.hidden1 = Linear(n_inputs, 25)
+        self.hidden1 = Linear(n_inputs, 10)
         kaiming_uniform_(self.hidden1.weight, nonlinearity='relu')
         self.act1 = ReLU()
         # second hidden layer
-        self.hidden2 = Linear(25, 10)
+        self.hidden2 = Linear(10, 6)
         kaiming_uniform_(self.hidden2.weight, nonlinearity='relu')
         self.act2 = ReLU()
         # third hidden layer
@@ -66,7 +66,7 @@ class MLP(Module):
         #kaiming_uniform_(self.hidden3.weight, nonlinearity='relu')
         #self.act3 = ReLU()
         # fourth hidden layer and output
-        self.hidden4 = Linear(10, 3)
+        self.hidden4 = Linear(6, 2)
         xavier_uniform_(self.hidden4.weight)
         self.act4 = Softmax(dim=1)
 
@@ -101,12 +101,12 @@ def prepare_data(path):
 def train_model(train_dl, model):
     # define the optimization
     criterion = CrossEntropyLoss()
-    optimizer = SGD(model.parameters(), lr=0.01, momentum=0.9)
+    optimizer = SGD(model.parameters(), lr=0.001, momentum=0.9)
     # enumerate epochs
     it = iter(train_dl)
     first = next(it)
     second = next(it)
-    for epoch in range(1000):
+    for epoch in range(1500):
         # enumerate mini batches
         for i, (inputs, targets) in enumerate(train_dl):
             # clear the gradients
@@ -158,13 +158,13 @@ for i in range(5):
     train_dl, test_dl = prepare_data(path)
     #print(len(train_dl.dataset), len(test_dl.dataset))
     # define the network
-    model = MLP(8)
+    model = MLP(6)
     # train the model
     train_model(train_dl, model)
     # evaluate the model
     acc = evaluate_model(test_dl, model)
     print('Accuracy: %.3f' % acc)
     # make a single prediction
-    row = [0.502, 0.785, 0.0275, 0.0847, 0.0337, 0.111, 0.59, 96.994]
-    yhat = predict(row, model)
+    #row = [0.502, 0.785, 0.0275, 0.0847, 0.0337, 0.111, 0.59, 96.994]
+    #yhat = predict(row, model)
     #print('Predicted: %s (class=%d)' % (yhat, argmax(yhat)))
