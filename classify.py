@@ -16,6 +16,7 @@ from torch.optim import SGD
 from torch.nn import CrossEntropyLoss
 from torch.nn.init import kaiming_uniform_
 from torch.nn.init import xavier_uniform_
+from utils import get_playlist_features
 
 # dataset definition
 class CSVDataset(Dataset):
@@ -66,7 +67,7 @@ class MLP(Module):
         #kaiming_uniform_(self.hidden3.weight, nonlinearity='relu')
         #self.act3 = ReLU()
         # fourth hidden layer and output
-        self.hidden4 = Linear(6, 2)
+        self.hidden4 = Linear(6, 3)
         xavier_uniform_(self.hidden4.weight)
         self.act4 = Softmax(dim=1)
 
@@ -152,9 +153,21 @@ def predict(row, model):
     yhat = yhat.detach().numpy()
     return yhat
 
+def outside_predict(model, playlist_id, expected_index):
+    songs = get_playlist_features(playlist_id)
+    print(len(songs))
+    correct = 0
+    for song in songs:
+        song.pop()
+        yhat = predict(song, model)
+        if argmax(yhat) == expected_index:
+            correct += 1
+    return correct / len(songs)
+
 # prepare the data
 path = 'playlists.csv'
-for i in range(5):
+NUM_TRAININGS = 1
+for i in range(NUM_TRAININGS):
     train_dl, test_dl = prepare_data(path)
     #print(len(train_dl.dataset), len(test_dl.dataset))
     # define the network
@@ -163,8 +176,7 @@ for i in range(5):
     train_model(train_dl, model)
     # evaluate the model
     acc = evaluate_model(test_dl, model)
-    print('Accuracy: %.3f' % acc)
-    # make a single prediction
-    #row = [0.502, 0.785, 0.0275, 0.0847, 0.0337, 0.111, 0.59, 96.994]
-    #yhat = predict(row, model)
-    #print('Predicted: %s (class=%d)' % (yhat, argmax(yhat)))
+    print('Evaluation Accuracy: %.3f' % acc)
+    # make predictions based on my own playlists
+    outside_acc_1 = outside_predict(model, "4SG13QaZvkAQmPh4BweFEs", 1)
+    print('Accuracy for my pop playlist: %.3f' % outside_acc_1)

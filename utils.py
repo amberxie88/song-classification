@@ -70,5 +70,5 @@ def create_csv(playlists):
 # Party Hits: spotify:playlist:6IfGK9nLC9ChgD7FTZzkLJ
 # Lofi: spotify:playlist:0vvXsWCC9xrXsKd4FyS8kM
 # Sleep: spotify:playlist:37i9dQZF1DWZd79rJ6a7lp
-playlists = ["7ABD15iASBIpPP5uJ5awvq", "6IfGK9nLC9ChgD7FTZzkLJ"]
+playlists = ["7ABD15iASBIpPP5uJ5awvq", "6IfGK9nLC9ChgD7FTZzkLJ", "0vvXsWCC9xrXsKd4FyS8kM"]
 create_csv(playlists)
