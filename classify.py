@@ -16,132 +16,14 @@ from torch.optim import SGD
 from torch.nn import CrossEntropyLoss
 from torch.nn.init import kaiming_uniform_
 from torch.nn.init import xavier_uniform_
-from utils import get_playlist_features
+import torch
+from train import MLP
+from utils import get_playlist_features, get_top_tracks_with_attributes
 
-# dataset definition
-class CSVDataset(Dataset):
-    # load the dataset
-    def __init__(self, path):
-        # load the csv file as a dataframe
-        df = read_csv(path, header=None)
-        # store the inputs and outputs
-        self.X = df.values[:, :-1]
-        self.y = df.values[:, -1]
-        # ensure input data is floats
-        self.X = self.X.astype('float32')
-        # label encode target and ensure the values are floats
-        self.y = LabelEncoder().fit_transform(self.y)
-
-
-    # number of rows in the dataset
-    def __len__(self):
-        return len(self.X)
-
-    # get a row at an index
-    def __getitem__(self, idx):
-        return [self.X[idx], self.y[idx]]
-
-    # get indexes for train and test rows
-    def get_splits(self, n_test=0.33):
-        # determine sizes
-        test_size = round(n_test * len(self.X))
-        train_size = len(self.X) - test_size
-        # calculate the split
-        return random_split(self, [train_size, test_size])
-
-# model definition
-class MLP(Module):
-    # define model elements
-    def __init__(self, n_inputs):
-        super(MLP, self).__init__()
-        # input to first hidden layer
-        self.hidden1 = Linear(n_inputs, 10)
-        kaiming_uniform_(self.hidden1.weight, nonlinearity='relu')
-        self.act1 = ReLU()
-        # second hidden layer
-        self.hidden2 = Linear(10, 6)
-        kaiming_uniform_(self.hidden2.weight, nonlinearity='relu')
-        self.act2 = ReLU()
-        # third hidden layer
-        #self.hidden3 = Linear(10, 8)
-        #kaiming_uniform_(self.hidden3.weight, nonlinearity='relu')
-        #self.act3 = ReLU()
-        # fourth hidden layer and output
-        self.hidden4 = Linear(6, 3)
-        xavier_uniform_(self.hidden4.weight)
-        self.act4 = Softmax(dim=1)
-
-    # forward propagate input
-    def forward(self, X):
-        # input to first hidden layer
-        X = self.hidden1(X)
-        X = self.act1(X)
-        # second hidden layer
-        X = self.hidden2(X)
-        X = self.act2(X)
-        # third hidden layer
-        #X = self.hidden3(X)
-        #X = self.act3(X)
-        # output layer
-        X = self.hidden4(X)
-        X = self.act4(X)
-        return X
-
-# prepare the dataset
-def prepare_data(path):
-    # load the dataset
-    dataset = CSVDataset(path)
-    # calculate split
-    train, test = dataset.get_splits()
-    # prepare data loaders
-    train_dl = DataLoader(train, batch_size=32, shuffle=True)
-    test_dl = DataLoader(test, batch_size=1024, shuffle=False)
-    return train_dl, test_dl
-
-# train the model
-def train_model(train_dl, model):
-    # define the optimization
-    criterion = CrossEntropyLoss()
-    optimizer = SGD(model.parameters(), lr=0.001, momentum=0.9)
-    # enumerate epochs
-    it = iter(train_dl)
-    first = next(it)
-    second = next(it)
-    for epoch in range(1500):
-        # enumerate mini batches
-        for i, (inputs, targets) in enumerate(train_dl):
-            # clear the gradients
-            optimizer.zero_grad()
-            # compute the model output
-            yhat = model(inputs)
-            # calculate loss
-            loss = criterion(yhat, targets)
-            # credit assignment
-            loss.backward()
-            # update model weights
-            optimizer.step()
-
-# evaluate the model
-def evaluate_model(test_dl, model):
-    predictions, actuals = list(), list()
-    for i, (inputs, targets) in enumerate(test_dl):
-        # evaluate the model on the test set
-        yhat = model(inputs)
-        # retrieve numpy array
-        yhat = yhat.detach().numpy()
-        actual = targets.numpy()
-        # convert to class labels
-        yhat = argmax(yhat, axis=1)
-        # reshape for stacking
-        actual = actual.reshape((len(actual), 1))
-        yhat = yhat.reshape((len(yhat), 1))
-        # store
-        predictions.append(yhat)
-        actuals.append(actual)
-    predictions, actuals = vstack(predictions), vstack(actuals)
-    # calculate accuracy
-    acc = accuracy_score(actuals, predictions)
-    return acc
+ATTRIBUTES = ["energy", "speechiness", "acousticness", "instrumentalness", "liveness", "valence"]
+NUM_CLUSTERS = 3
+RANGES = ['short_term', 'medium_term', 'long_term']
+CLASSIFICATION_DICT = {0: 'lofi', 1: 'party pop', 2: 'sad songs'}
 
 # make a class prediction for one row of data
 def predict(row, model):
@@ -153,30 +35,43 @@ def predict(row, model):
     yhat = yhat.detach().numpy()
     return yhat
 
-def outside_predict(model, playlist_id, expected_index):
-    songs = get_playlist_features(playlist_id)
-    print(len(songs))
-    correct = 0
-    for song in songs:
-        song.pop()
-        yhat = predict(song, model)
-        if argmax(yhat) == expected_index:
-            correct += 1
-    return correct / len(songs)
+def outside_predict(model, playlist_id, expected_index, attributes):
+    songs = get_playlist_features(playlist_id, attributes)
+    [song.pop() for song in songs] # last attribute is playlist id
+    classification_count = outside_playlist_classification(model, songs)
+    return classification_count[expected_index] / len(songs)
 
-# prepare the data
-path = 'playlists.csv'
-NUM_TRAININGS = 1
-for i in range(NUM_TRAININGS):
-    train_dl, test_dl = prepare_data(path)
-    #print(len(train_dl.dataset), len(test_dl.dataset))
-    # define the network
-    model = MLP(6)
-    # train the model
-    train_model(train_dl, model)
-    # evaluate the model
-    acc = evaluate_model(test_dl, model)
-    print('Evaluation Accuracy: %.3f' % acc)
+# songs should be a list of atribute lists
+def outside_playlist_classification(model, songs):
+    classification_count = {}
+    for i in range(NUM_CLUSTERS):
+        classification_count[i] = 0
+    for song in songs:
+        yhat = predict(song, model)
+        classification_count[argmax(yhat)] += 1
+    return classification_count
+
+def key_with_max_value(dictionary):
+    max_key_value = [None, float('-inf')]
+    for key in dictionary.keys():
+        if dictionary[key] > max_key_value[1]:
+            max_key_value = [key, dictionary[key]]
+    return max_key_value[0]
+
+def main_classify():
+    model = torch.load("model.pt")
+
     # make predictions based on my own playlists
-    outside_acc_1 = outside_predict(model, "4SG13QaZvkAQmPh4BweFEs", 1)
+    outside_acc_1 = outside_predict(model, "4SG13QaZvkAQmPh4BweFEs", 1, ATTRIBUTES)
     print('Accuracy for my pop playlist: %.3f' % outside_acc_1)
+
+    # sort my listening data
+    NUM_SONGS = 50 # for the listening data
+    scope_to_features, id_to_song_meta = get_top_tracks_with_attributes(ATTRIBUTES)
+    for sp_range in RANGES: 
+        features = scope_to_features[sp_range]
+        [f.pop() for f in features]
+        classification_count = outside_playlist_classification(model, features)
+        print("Your", sp_range, "listening has been")
+        for i in range(NUM_CLUSTERS):
+            print("-", round(classification_count[i] / NUM_SONGS * 100, 2), "%", CLASSIFICATION_DICT[i])
